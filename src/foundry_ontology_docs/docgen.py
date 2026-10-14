@@ -49,16 +49,20 @@ def build_object_type_rows(full_metadata: dict[str, Any]) -> list[dict[str, Any]
     for api_name, entry in sorted(object_types.items()):
         ot = entry.get("objectType", {}) or {}
         props = ot.get("properties", {}) or {}
-        prop_rows = [
-            {
-                "api_name": p_name,
-                "display_name": p.get("displayName") or p_name,
-                "data_type": _fmt_data_type(p.get("dataType")),
-                "description": p.get("description") or "",
-                "is_primary_key": p_name == ot.get("primaryKey"),
-            }
-            for p_name, p in sorted(props.items())
-        ]
+        pk = ot.get("primaryKey")
+        prop_rows = sorted(
+            [
+                {
+                    "api_name": p_name,
+                    "display_name": p.get("displayName") or p_name,
+                    "data_type": _fmt_data_type(p.get("dataType")),
+                    "description": p.get("description") or "",
+                    "is_primary_key": p_name == pk,
+                }
+                for p_name, p in props.items()
+            ],
+            key=lambda r: (0 if r["is_primary_key"] else 1, r["api_name"].lower()),
+        )
         link_rows = [
             {
                 "api_name": lt.get("apiName"),

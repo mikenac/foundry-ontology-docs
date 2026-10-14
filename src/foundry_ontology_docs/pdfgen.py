@@ -185,12 +185,21 @@ tr:nth-child(even) td { background: #f7f8fb; }
     padding-bottom: 2pt;
     margin: 0 0 6pt 0;
 }
-.toc-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    column-gap: 8pt;
-    row-gap: 2pt;
+/* TOC links rendered as a borderless 3-column table so WeasyPrint emits
+   PDF link annotations (it drops annotations inside display:grid) */
+.toc-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    table-layout: fixed;
     font-size: 7.8pt;
+}
+.toc-table td {
+    border: none;
+    background: transparent;
+    padding: 1.5pt 4pt;
+    vertical-align: top;
+    overflow-wrap: anywhere;
 }
 
 /* object & action sections */
@@ -335,24 +344,41 @@ def _build_cover(data: dict, object_types: list[dict], action_types: list[dict])
 """
 
 
+def _toc_table(items: list[tuple[str, str]], cols: int = 3) -> str:
+    """Render a list of (href, label) pairs as a borderless N-column table.
+    WeasyPrint only emits PDF link annotations for <a> elements inside
+    block/table layout — display:grid silently drops them."""
+    rows = []
+    for i in range(0, len(items), cols):
+        chunk = items[i:i + cols]
+        cells = "".join(
+            f'<td><a href="{href}">{_h(label)}</a></td>'
+            for href, label in chunk
+        )
+        # pad to full width so column widths stay stable
+        cells += "<td></td>" * (cols - len(chunk))
+        rows.append(f"<tr>{cells}</tr>")
+    return f'<table class="toc-table"><colgroup>' + '<col>' * cols + f'</colgroup><tbody>{"".join(rows)}</tbody></table>'
+
+
 def _build_toc(object_types: list[dict], action_types: list[dict]) -> str:
-    obj_links = "\n".join(
-        f'<a href="#{_slug(ot["api_name"])}">{_h(ot["display_name"])}</a>'
+    obj_items = [
+        (f"#{_slug(ot['api_name'])}", ot["display_name"])
         for ot in object_types
-    )
-    act_links = "\n".join(
-        f'<a href="#{_action_slug(at["api_name"])}">{_h(at["display_name"])}</a>'
+    ]
+    act_items = [
+        (f"#{_action_slug(at['api_name'])}", at["display_name"])
         for at in action_types
-    )
+    ]
     return f"""
 <h1>Table of Contents</h1>
 <div class="toc-section">
   <div class="toc-section-title">Object Types ({len(object_types)})</div>
-  <div class="toc-grid">{obj_links}</div>
+  {_toc_table(obj_items)}
 </div>
 <div class="toc-section">
   <div class="toc-section-title">Action Types ({len(action_types)})</div>
-  <div class="toc-grid">{act_links}</div>
+  {_toc_table(act_items)}
 </div>
 """
 
@@ -441,7 +467,10 @@ def generate_pdf(export_path: Path, out_path: Path) -> None:
 </html>"""
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=html_doc).write_pdf(str(out_path))
+    # base_url must be set to a file:// URI for WeasyPrint to emit PDF
+    # internal-link annotations for fragment hrefs (e.g. href="#obj-BedRequest").
+    # Without it, WeasyPrint silently drops all #anchor links from the output.
+    HTML(string=html_doc, base_url="file:///tmp/").write_pdf(str(out_path))
     print(
         f"Wrote {out_path} ({out_path.stat().st_size:,} bytes) — "
         f"{len(object_types)} objects, {len(action_types)} actions"

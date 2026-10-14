@@ -1,0 +1,27 @@
+# Action Types
+
+{{ meta.n_action_types }} action types in ontology `{{ meta.ontology }}`.
+
+{% for a in action_types %}
+## {{ a.display_name }}
+
+`{{ a.api_name }}`{% if a.rid %} · `{{ a.rid }}`{% endif %}{% if a.status %} · status: {{ a.status }}{% endif %}
+
+{% if a.description %}
+{{ a.description }}
+{% endif %}
+
+**Operations**: {% for op in a.operations %}{{ op.type }}({{ op.object_type }}){% if not loop.last %}, {% endif %}{% endfor %}
+
+**Parameters**:
+
+| Name | Display Name | Type | Required | Description |
+|---|---|---|---|---|
+{% for p in a.parameters %}
+| `{{ p.api_name }}` | {{ p.display_name }} | `{{ p.data_type }}` | {{ "yes" if p.required else "no" }} | {{ p.description }} |
+{% endfor %}
+
+---
+{% endfor %}
+
+[← Back to index](index.md)

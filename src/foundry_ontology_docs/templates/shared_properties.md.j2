@@ -1,0 +1,11 @@
+# Shared Property Types
+
+{{ meta.n_shared_properties }} shared property types in ontology `{{ meta.ontology }}`.
+
+| API Name | Display Name | Type | Description |
+|---|---|---|---|
+{% for s in shared_properties %}
+| `{{ s.api_name }}` | {{ s.display_name }} | `{{ s.data_type }}` | {{ s.description }} |
+{% endfor %}
+
+[← Back to index](index.md)

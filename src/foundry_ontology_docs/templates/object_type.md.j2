@@ -1,0 +1,37 @@
+# {{ ot.display_name }}
+
+`{{ ot.api_name }}`{% if ot.rid %} · `{{ ot.rid }}`{% endif %}
+
+{% if ot.description %}
+{{ ot.description }}
+{% endif %}
+
+- **Plural display name**: {{ ot.plural_display_name or "—" }}
+- **Primary key**: `{{ ot.primary_key }}`
+- **Status**: {{ ot.status or "—" }}
+{% if ot.implements_interfaces %}
+- **Implements interfaces**: {% for i in ot.implements_interfaces %}`{{ i }}`{% if not loop.last %}, {% endif %}{% endfor %}
+
+{% endif %}
+
+## Properties
+
+| API Name | Display Name | Type | Primary Key | Description |
+|---|---|---|---|---|
+{% for p in ot.properties %}
+| `{{ p.api_name }}` | {{ p.display_name }} | `{{ p.data_type }}` | {{ "✓" if p.is_primary_key else "" }} | {{ p.description }} |
+{% endfor %}
+
+## Links
+
+{% if ot.links %}
+| API Name | Display Name | Target Object Type | Cardinality | Status |
+|---|---|---|---|---|
+{% for l in ot.links %}
+| `{{ l.api_name }}` | {{ l.display_name }} | [`{{ l.target_object_type }}`]({{ l.target_object_type }}.md) | {{ l.cardinality }} | {{ l.status }} |
+{% endfor %}
+{% else %}
+_No links defined._
+{% endif %}
+
+[← Back to index](../index.md)

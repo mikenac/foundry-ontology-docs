@@ -1,0 +1,23 @@
+# Interfaces
+
+{{ meta.n_interfaces }} interfaces in ontology `{{ meta.ontology }}`.
+
+{% for i in interfaces %}
+## {{ i.display_name }}
+
+`{{ i.api_name }}`
+
+{% if i.description %}
+{{ i.description }}
+{% endif %}
+
+{% if i.extends_interfaces %}
+**Extends**: {% for e in i.extends_interfaces %}`{{ e }}`{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+
+**Properties**: {% for p in i.properties %}`{{ p }}`{% if not loop.last %}, {% endif %}{% endfor %}
+
+---
+{% endfor %}
+
+[← Back to index](index.md)

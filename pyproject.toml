@@ -1,0 +1,20 @@
+[project]
+name = "foundry-ontology-docs"
+version = "0.1.0"
+description = "Export a Foundry ontology's full metadata via the Foundry Platform SDK, then generate documentation from it."
+requires-python = ">=3.11"
+dependencies = [
+    "foundry-platform-sdk>=1.108.0",
+    "jinja2>=3.1",
+]
+
+[project.scripts]
+foundry-ontology-export = "foundry_ontology_docs.export:main"
+foundry-ontology-docgen = "foundry_ontology_docs.docgen:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/foundry_ontology_docs"]

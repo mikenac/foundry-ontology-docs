@@ -1,0 +1,20 @@
+# Ontology Documentation
+
+- **Ontology**: `{{ meta.ontology }}`
+- **Host**: `{{ meta.hostname }}`
+- **Exported**: {{ meta.exported_at }}
+- **Object types**: {{ meta.n_object_types }}
+- **Link types**: {{ meta.n_link_types }}
+- **Action types**: {{ meta.n_action_types }}
+- **Interfaces**: {{ meta.n_interfaces }}
+- **Shared property types**: {{ meta.n_shared_properties }}
+
+See also: [Action Types](action-types.md) · [Interfaces](interfaces.md) · [Shared Property Types](shared-property-types.md)
+
+## Object Types
+
+| API Name | Display Name | Primary Key | Status | Properties | Links |
+|---|---|---|---|---|---|
+{% for ot in object_types %}
+| [`{{ ot.api_name }}`](object-types/{{ ot.api_name }}.md) | {{ ot.display_name }} | `{{ ot.primary_key }}` | {{ ot.status or "" }} | {{ ot.properties|length }} | {{ ot.links|length }} |
+{% endfor %}

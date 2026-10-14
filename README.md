@@ -56,9 +56,23 @@ for o in c.ontologies.Ontology.list().data:
    - `docs/interfaces.md` — interface types
    - `docs/shared-property-types.md` — shared property types
 
-Both `out/` (raw export) and `docs/` (generated docs) are gitignored because
-they contain live tenant data pulled straight from Foundry. Re-run the two
-commands whenever you need a fresh snapshot.
+3. (Optional) Render all of the above into a single combined PDF:
+
+   ```bash
+   uv run foundry-ontology-pdfgen --docs-dir docs --out docs/ontology-documentation.pdf
+   ```
+
+   This is pure-Python (`markdown` + `xhtml2pdf`), no system dependencies
+   (no wkhtmltopdf/Chromium install needed). It concatenates index →
+   interfaces → shared property types → action types → every object type
+   page, paginates with page numbers, and de-links the cross-page Markdown
+   links (which don't resolve inside a single PDF) down to plain `code`
+   text. On the real TeleTracking dev ontology export this produces a
+   ~690-page, ~2.9MB PDF.
+
+Both `out/` (raw export) and `docs/` (generated docs, including the PDF)
+are gitignored because they contain live tenant data pulled straight from
+Foundry. Re-run the three commands whenever you need a fresh snapshot.
 
 ## How it works
 
@@ -70,6 +84,10 @@ commands whenever you need a fresh snapshot.
 - `src/foundry_ontology_docs/docgen.py` reshapes that JSON into flat rows
   and renders Jinja2 templates (`src/foundry_ontology_docs/templates/*.md.j2`)
   into Markdown.
+- `src/foundry_ontology_docs/pdfgen.py` reads the generated Markdown files
+  back off disk, converts each to HTML (`markdown` package), concatenates
+  them in a fixed reading order, and renders the combined HTML to PDF with
+  `xhtml2pdf` (pure Python, no native binary dependency).
 
 ## Notes / known limitations
 

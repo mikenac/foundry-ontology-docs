@@ -1,0 +1,11 @@
+# All Links
+
+Every link between object types in ontology `{{ meta.ontology }}`, flattened into one table ({{ rows|length }} rows, one row per direction as reported by the API). Also available as [all-links.csv](all-links.csv) for spreadsheet/filter use.
+
+| Source Object Type | Link | Display Name | Target Object Type | Cardinality | Status |
+|---|---|---|---|---|---|
+{% for r in rows %}
+| [`{{ r.source_object_type }}`](object-types/{{ r.source_object_type }}.md) | `{{ r.link_api_name }}` | {{ r.link_display_name }} | [`{{ r.target_object_type }}`](object-types/{{ r.target_object_type }}.md) | {{ r.cardinality }} | {{ r.status }} |
+{% endfor %}
+
+[← Back to index](index.md)

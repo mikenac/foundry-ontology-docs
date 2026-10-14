@@ -41,6 +41,8 @@ a { color: #1a56c4; text-decoration: none; }
 # Order matters: this is the reading order of the combined PDF.
 SECTION_FILES = [
     "index.md",
+    "all-properties.md",
+    "all-links.md",
     "interfaces.md",
     "shared-property-types.md",
     "action-types.md",

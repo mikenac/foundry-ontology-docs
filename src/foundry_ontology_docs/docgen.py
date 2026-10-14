@@ -153,6 +153,57 @@ def build_shared_property_rows(full_metadata: dict[str, Any]) -> list[dict[str, 
     return rows
 
 
+def build_all_properties_rows(object_types: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten every property of every object type into one list, for a
+    single scannable table/CSV instead of paging through 227 files."""
+    rows = []
+    for ot in object_types:
+        for p in ot["properties"]:
+            rows.append(
+                {
+                    "object_type": ot["api_name"],
+                    "object_display_name": ot["display_name"],
+                    "property_api_name": p["api_name"],
+                    "property_display_name": p["display_name"],
+                    "data_type": p["data_type"],
+                    "is_primary_key": p["is_primary_key"],
+                    "description": p["description"],
+                }
+            )
+    return rows
+
+
+def build_all_links_rows(object_types: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten every link of every object type into one list (one row per
+    direction, as the API reports it) for a single scannable table/CSV."""
+    rows = []
+    for ot in object_types:
+        for l in ot["links"]:
+            rows.append(
+                {
+                    "source_object_type": ot["api_name"],
+                    "link_api_name": l["api_name"],
+                    "link_display_name": l["display_name"],
+                    "target_object_type": l["target_object_type"],
+                    "cardinality": l["cardinality"],
+                    "status": l["status"],
+                }
+            )
+    return rows
+
+
+def _write_csv(rows: list[dict[str, Any]], path: Path) -> None:
+    import csv
+
+    if not rows:
+        path.write_text("")
+        return
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def generate(export_path: Path, out_dir: Path) -> None:
     data = load_export(export_path)
     full_metadata = data.get("full_metadata", {})
@@ -202,10 +253,25 @@ def generate(export_path: Path, out_dir: Path) -> None:
         spt_tpl.render(shared_properties=shared_properties, meta=meta)
     )
 
+    all_properties = build_all_properties_rows(object_types)
+    all_links = build_all_links_rows(object_types)
+
+    all_props_tpl = env.get_template("all_properties.md.j2")
+    (out_dir / "all-properties.md").write_text(
+        all_props_tpl.render(rows=all_properties, meta=meta)
+    )
+
+    all_links_tpl = env.get_template("all_links.md.j2")
+    (out_dir / "all-links.md").write_text(all_links_tpl.render(rows=all_links, meta=meta))
+
+    _write_csv(all_properties, out_dir / "all-properties.csv")
+    _write_csv(all_links, out_dir / "all-links.csv")
+
     print(
         f"Wrote docs to {out_dir}/ "
         f"({meta['n_object_types']} object types, {meta['n_action_types']} action types, "
-        f"{meta['n_interfaces']} interfaces, {meta['n_shared_properties']} shared properties)"
+        f"{meta['n_interfaces']} interfaces, {meta['n_shared_properties']} shared properties, "
+        f"{len(all_properties)} properties total, {len(all_links)} links total)"
     )
 
 

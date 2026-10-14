@@ -1,0 +1,11 @@
+# All Properties
+
+Every property of every object type in ontology `{{ meta.ontology }}`, flattened into one table ({{ rows|length }} rows). Also available as [all-properties.csv](all-properties.csv) for spreadsheet/filter use.
+
+| Object Type | Object Display Name | Property | Display Name | Type | PK | Description |
+|---|---|---|---|---|---|---|
+{% for r in rows %}
+| [`{{ r.object_type }}`](object-types/{{ r.object_type }}.md) | {{ r.object_display_name }} | `{{ r.property_api_name }}` | {{ r.property_display_name }} | `{{ r.data_type }}` | {{ "x" if r.is_primary_key else "" }} | {{ r.description }} |
+{% endfor %}
+
+[← Back to index](index.md)

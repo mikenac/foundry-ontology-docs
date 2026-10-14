@@ -299,6 +299,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "foundry-platform-sdk" },
+    { name = "graphviz" },
     { name = "jinja2" },
     { name = "markdown" },
     { name = "weasyprint" },
@@ -307,6 +308,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "foundry-platform-sdk", specifier = ">=1.108.0" },
+    { name = "graphviz", specifier = ">=0.21" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "markdown", specifier = ">=3.11.1" },
     { name = "weasyprint", specifier = ">=70.0" },
@@ -329,6 +331,15 @@ dependencies = [
 sdist = { url = "https://repo.teledev.io/repository/pypi-all/packages/foundry-platform-sdk/1.108.0/foundry_platform_sdk-1.108.0.tar.gz", hash = "sha256:0f294055e63bc27e0ef816d4038a5e1ad0ccd3b759125163d3b98d6243698dfe" }
 wheels = [
     { url = "https://repo.teledev.io/repository/pypi-all/packages/foundry-platform-sdk/1.108.0/foundry_platform_sdk-1.108.0-py3-none-any.whl", hash = "sha256:30b30aba8828fe7b51cc2871a609c653b98b6b811b7d82f4a29001586697456b" },
+]
+
+[[package]]
+name = "graphviz"
+version = "0.21"
+source = { registry = "https://repo.teledev.io/repository/pypi-all/simple" }
+sdist = { url = "https://repo.teledev.io/repository/pypi-all/packages/graphviz/0.21/graphviz-0.21.tar.gz", hash = "sha256:20743e7183be82aaaa8ad6c93f8893c923bd6658a04c32ee115edb3c8a835f78" }
+wheels = [
+    { url = "https://repo.teledev.io/repository/pypi-all/packages/graphviz/0.21/graphviz-0.21-py3-none-any.whl", hash = "sha256:54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42" },
 ]
 
 [[package]]

@@ -5,6 +5,7 @@ description = "Export a Foundry ontology's full metadata via the Foundry Platfor
 requires-python = ">=3.11"
 dependencies = [
     "foundry-platform-sdk>=1.108.0",
+    "graphviz>=0.21",
     "jinja2>=3.1",
     "markdown>=3.11.1",
     "weasyprint>=70.0",
@@ -14,6 +15,7 @@ dependencies = [
 foundry-ontology-export = "foundry_ontology_docs.export:main"
 foundry-ontology-docgen = "foundry_ontology_docs.docgen:main"
 foundry-ontology-pdfgen = "foundry_ontology_docs.pdfgen:main"
+foundry-ontology-graphgen = "foundry_ontology_docs.graphgen:main"
 
 [build-system]
 requires = ["hatchling"]

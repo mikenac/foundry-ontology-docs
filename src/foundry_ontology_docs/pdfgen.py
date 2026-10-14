@@ -220,6 +220,18 @@ tr:nth-child(even) td { background: #f7f8fb; }
     margin-bottom: 14pt;
 }
 .action-ops { font-size: 7.8pt; margin: 3pt 0 6pt 0; color: #444; }
+
+/* relationship diagram embed */
+.graph-embed {
+    margin: 4pt 0 8pt 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+.graph-embed svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
 """
 
 
@@ -383,7 +395,15 @@ def _build_toc(object_types: list[dict], action_types: list[dict]) -> str:
 """
 
 
-def _build_object_sections(object_types: list[dict]) -> str:
+def _embed_svg(svg_path: Path) -> str:
+    """Inline an SVG file, stripping the XML declaration so it embeds cleanly."""
+    raw = svg_path.read_text(encoding="utf-8")
+    # Remove XML declaration if present
+    raw = re.sub(r"<\?xml[^?]*\?>", "", raw).strip()
+    return f'<div class="graph-embed">{raw}</div>'
+
+
+def _build_object_sections(object_types: list[dict], graph_dir: Path | None = None) -> str:
     parts = ["<h1>Object Types</h1>"]
     for ot in object_types:
         slug = _slug(ot["api_name"])
@@ -396,6 +416,13 @@ def _build_object_sections(object_types: list[dict]) -> str:
             f"<tr><td>Description</td><td>{_h(ot['description'])}</td></tr>"
             if ot["description"] else ""
         )
+        # Embed neighbourhood SVG if it exists
+        graph_html = ""
+        if graph_dir and ot["links"]:
+            svg_path = graph_dir / f"{ot['api_name']}.svg"
+            if svg_path.exists():
+                graph_html = f"<h3>Relationship Diagram</h3>{_embed_svg(svg_path)}"
+
         parts.append(f"""
 <div id="{slug}">
   <h2>{_h(ot['display_name'])}{status_tag}
@@ -413,6 +440,7 @@ def _build_object_sections(object_types: list[dict]) -> str:
   {_property_table(ot['properties'])}
   <h3>Links</h3>
   {_link_table(ot['links'])}
+  {graph_html}
 </div>
 """)
     return "\n".join(parts)
@@ -444,13 +472,17 @@ def _build_action_sections(action_types: list[dict]) -> str:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def generate_pdf(export_path: Path, out_path: Path) -> None:
+def generate_pdf(export_path: Path, out_path: Path, graph_dir: Path | None = None) -> None:
     from foundry_ontology_docs.docgen import build_object_type_rows, build_action_type_rows
 
     data = json.loads(export_path.read_text())
     full_metadata = data.get("full_metadata", {})
     object_types = build_object_type_rows(full_metadata)
     action_types = build_action_type_rows(full_metadata)
+
+    if graph_dir and not graph_dir.exists():
+        print(f"Warning: --graph-dir {graph_dir} not found, skipping diagrams. Run foundry-ontology-graphgen first.")
+        graph_dir = None
 
     html_doc = f"""<!DOCTYPE html>
 <html>
@@ -461,7 +493,7 @@ def generate_pdf(export_path: Path, out_path: Path) -> None:
 <body>
 {_build_cover(data, object_types, action_types)}
 {_build_toc(object_types, action_types)}
-{_build_object_sections(object_types)}
+{_build_object_sections(object_types, graph_dir=graph_dir)}
 {_build_action_sections(action_types)}
 </body>
 </html>"""
@@ -471,9 +503,11 @@ def generate_pdf(export_path: Path, out_path: Path) -> None:
     # internal-link annotations for fragment hrefs (e.g. href="#obj-BedRequest").
     # Without it, WeasyPrint silently drops all #anchor links from the output.
     HTML(string=html_doc, base_url="file:///tmp/").write_pdf(str(out_path))
+    n_graphs = sum(1 for ot in object_types if ot["links"] and graph_dir and (graph_dir / f"{ot['api_name']}.svg").exists())
     print(
         f"Wrote {out_path} ({out_path.stat().st_size:,} bytes) — "
         f"{len(object_types)} objects, {len(action_types)} actions"
+        + (f", {n_graphs} relationship diagrams embedded" if n_graphs else "")
     )
 
 
@@ -492,9 +526,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--in", dest="in_path", default="out/ontology_export.json")
     parser.add_argument("--out", default="docs/ontology-documentation.pdf")
+    parser.add_argument("--graph-dir", dest="graph_dir", default=None,
+                        help="Path to neighbourhood SVGs from foundry-ontology-graphgen (default: docs/graph if it exists)")
     args = parser.parse_args()
     _check_native_deps()
-    generate_pdf(Path(args.in_path), Path(args.out))
+    graph_dir = Path(args.graph_dir) if args.graph_dir else Path("docs/graph")
+    generate_pdf(Path(args.in_path), Path(args.out), graph_dir=graph_dir)
 
 
 if __name__ == "__main__":

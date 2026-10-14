@@ -52,6 +52,8 @@ for o in c.ontologies.Ontology.list().data:
    Output:
    - `docs/index.md` — summary + object type index
    - `docs/object-types/<ApiName>.md` — one page per object type (properties, links)
+   - `docs/all-properties.md` + `docs/all-properties.csv` — every property of every object type, flattened into one table
+   - `docs/all-links.md` + `docs/all-links.csv` — every link between object types, flattened into one table
    - `docs/action-types.md` — all action types with parameters and operations
    - `docs/interfaces.md` — interface types
    - `docs/shared-property-types.md` — shared property types
@@ -62,13 +64,18 @@ for o in c.ontologies.Ontology.list().data:
    uv run foundry-ontology-pdfgen --docs-dir docs --out docs/ontology-documentation.pdf
    ```
 
-   This is pure-Python (`markdown` + `xhtml2pdf`), no system dependencies
-   (no wkhtmltopdf/Chromium install needed). It concatenates index →
+   Uses WeasyPrint (`markdown` → HTML → PDF). WeasyPrint depends on native
+   Cairo/Pango/GLib libraries — on macOS: `brew install cairo pango
+   gdk-pixbuf libffi` (already present if you have Homebrew's `weasyprint`
+   CLI installed). It concatenates index → all-properties → all-links →
    interfaces → shared property types → action types → every object type
-   page, paginates with page numbers, and de-links the cross-page Markdown
-   links (which don't resolve inside a single PDF) down to plain `code`
-   text. On the real TeleTracking dev ontology export this produces a
-   ~690-page, ~2.9MB PDF.
+   page, with proper table-row pagination (no overlapping wrapped cells —
+   an earlier version used `xhtml2pdf`, which had a row-height bug that
+   made multi-line cells overlap the row below; WeasyPrint's table layout
+   doesn't have that problem) and de-links the cross-page Markdown links
+   (which don't resolve inside a single PDF) down to plain `code` text. On
+   the real TeleTracking dev ontology export this produces a ~974-page,
+   ~8MB PDF.
 
 Both `out/` (raw export) and `docs/` (generated docs, including the PDF)
 are gitignored because they contain live tenant data pulled straight from
@@ -83,11 +90,12 @@ Foundry. Re-run the three commands whenever you need a fresh snapshot.
   call — and dumps it to JSON via pydantic's `model_dump`.
 - `src/foundry_ontology_docs/docgen.py` reshapes that JSON into flat rows
   and renders Jinja2 templates (`src/foundry_ontology_docs/templates/*.md.j2`)
-  into Markdown.
+  into Markdown, plus two "flattened" views (every property / every link
+  across all object types) as both Markdown and CSV.
 - `src/foundry_ontology_docs/pdfgen.py` reads the generated Markdown files
   back off disk, converts each to HTML (`markdown` package), concatenates
   them in a fixed reading order, and renders the combined HTML to PDF with
-  `xhtml2pdf` (pure Python, no native binary dependency).
+  WeasyPrint.
 
 ## Notes / known limitations
 

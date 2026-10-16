@@ -25,7 +25,15 @@ from foundry_sdk import FoundryClient, UserTokenAuth
 def _load_dotenv() -> None:
     """Load .env from the repo root into os.environ (if present).
     Pure-stdlib implementation — no python-dotenv dependency required.
-    Variables already set in the environment take precedence."""
+    Variables already set in the environment take precedence.
+
+    Supports command substitution: VALUE=$(some-command --args)
+    The command is run via the shell and its stdout used as the value.
+    Example:
+        FOUNDRY_TOKEN=$(security find-generic-password -s hermes-foundry-us-token -w)
+    """
+    import subprocess
+    import re
     env_path = Path(__file__).parent.parent.parent / ".env"
     if not env_path.exists():
         return
@@ -36,6 +44,15 @@ def _load_dotenv() -> None:
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip('"').strip("'")
+        # Evaluate $(command) substitutions
+        match = re.fullmatch(r'\$\((.+)\)', value)
+        if match:
+            try:
+                value = subprocess.check_output(
+                    match.group(1), shell=True, text=True
+                ).strip()
+            except subprocess.CalledProcessError:
+                value = ""
         if key and key not in os.environ:
             os.environ[key] = value
 

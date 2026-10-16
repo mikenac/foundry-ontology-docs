@@ -1,23 +1,29 @@
-"""Generate Graphviz relationship diagrams from the ontology export.
+"""Generate relationship diagrams from the ontology export.
 
 Usage:
     uv run foundry-ontology-graphgen [--in out/ontology_export.json] [--out-dir docs/graph]
 
 Produces:
-    overview.svg          — all objects that have at least one link, fdp layout
-    <ObjectName>.svg      — per-object 1-hop neighbourhood diagram
+    overview.svg          — all objects that have ≥1 link (Graphviz sfdp, handles 167 nodes)
+    <ObjectName>.svg      — per-object 1-hop neighbourhood (PlantUML IE/ERD, proper crow's foot)
+
+PlantUML is used for per-object diagrams because it renders crow's foot cardinality
+symbols (||--o{ for MANY, ||--o| for ONE) cleanly as proper ERD notation.
+Graphviz is kept for the overview because PlantUML cannot scale to 167 nodes.
+Requires: `plantuml` CLI on PATH (brew install plantuml).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Any
 
 import graphviz
 
-# ── colour palette ────────────────────────────────────────────────────────────
+# ── colour palette (shared) ───────────────────────────────────────────────────
 STATUS_FILL = {
     "ACTIVE":       "#d4edda",
     "EXPERIMENTAL": "#fff3cd",
@@ -28,15 +34,183 @@ STATUS_BORDER = {
     "EXPERIMENTAL": "#856404",
     "DEPRECATED":   "#721c24",
 }
-CARDINALITY_COLOR = {
-    "ONE":  "#2b4a7a",
-    "MANY": "#6a5acd",
+# PlantUML header colours per status (header bg, header font)
+PUML_HEADER = {
+    "ACTIVE":       ("#155724", "white"),
+    "EXPERIMENTAL": ("#856404", "white"),
+    "DEPRECATED":   ("#721c24", "white"),
 }
 DEFAULT_FILL   = "#e8eef7"
 DEFAULT_BORDER = "#2b4a7a"
 
 
-def _node_attrs(ot: dict) -> dict[str, str]:
+# ── shared: merge parallel edges ──────────────────────────────────────────────
+
+def _merge_links(links: list[dict]) -> dict[str, dict]:
+    """Collapse multiple links to the same target into one entry.
+    Cardinality: MANY wins over ONE."""
+    merged: dict[str, dict] = {}
+    for lk in links:
+        tgt = lk.get("target_object_type") or ""
+        card = (lk.get("cardinality") or "").upper()
+        if tgt not in merged:
+            merged[tgt] = {"target": tgt, "labels": [], "cardinality": card}
+        merged[tgt]["labels"].append(lk.get("link_display_name") or lk.get("api_name") or "")
+        if card == "MANY":
+            merged[tgt]["cardinality"] = "MANY"
+    return merged
+
+
+# ── PlantUML neighbourhood diagrams ───────────────────────────────────────────
+
+def _puml_escape(s: str) -> str:
+    """Escape characters that break PlantUML string literals."""
+    return s.replace('"', "'").replace("\n", "\\n").replace("<", "~<").replace(">", "~>")
+
+
+def _puml_entity(api_name: str, ot: dict, is_focal: bool = False,
+                 link_labels: list[str] | None = None) -> str:
+    """Render one PlantUML entity block."""
+    s = (ot.get("status") or "").upper()
+    fill = STATUS_FILL.get(s, DEFAULT_FILL)
+    hdr_bg, hdr_fg = PUML_HEADER.get(s, ("#2b4a7a", "white"))
+    display = _puml_escape(ot.get("display_name") or api_name)
+
+    # PlantUML entity colour syntax: entity "Name" as alias #fillcolor/headercolor {
+    # fill already contains the leading #; don't add another one.
+    lines = [f'entity "{display}" as {api_name} {fill}/white {{']
+
+    # Primary key first
+    props = ot.get("properties", []) or []
+    pk_props = [p for p in props if p.get("is_primary_key")]
+    other_props = [p for p in props if not p.get("is_primary_key")]
+
+    for p in pk_props:
+        lines.append(f'  * **{_puml_escape(p["api_name"])}** : {p["data_type"]} <<PK>>')
+
+    if other_props:
+        lines.append("  ==")
+        # For focal entity show all properties; for neighbours show at most 5
+        shown = other_props if is_focal else other_props[:5]
+        for p in shown:
+            lines.append(f'  {_puml_escape(p["api_name"])} : {p["data_type"]}')
+        if not is_focal and len(other_props) > 5:
+            lines.append(f"  .. +{len(other_props) - 5} more ..")
+
+    # Link names inside the box for neighbour nodes
+    if link_labels:
+        lines.append("  ==")
+        for lbl in link_labels:
+            lines.append(f"  //← {_puml_escape(lbl)}//")
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _puml_unknown_entity(api_name: str, link_labels: list[str]) -> str:
+    lines = [f'entity "{api_name}" as {api_name} #eeeeee/white {{']
+    lines.append("  * id : string <<PK>>")
+    if link_labels:
+        lines.append("  ==")
+        for lbl in link_labels:
+            lines.append(f"  //← {_puml_escape(lbl)}//")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _puml_relation(src: str, tgt: str, cardinality: str) -> str:
+    """IE crow's foot notation:
+        ||--o|   one-to-zero-or-one  (ONE)
+        ||--o{   one-to-zero-or-many (MANY)
+    """
+    if cardinality == "MANY":
+        return f"{src} ||--o{{ {tgt} : \" \""
+    else:
+        return f"{src} ||--o| {tgt} : \" \""
+
+
+def build_neighbourhood_puml(ot: dict, ot_by_name: dict[str, dict], out_path: Path) -> Path | None:
+    """Generate a PlantUML IE ERD for one object's 1-hop neighbourhood."""
+    if not ot["links"]:
+        return None
+
+    merged = _merge_links(ot["links"])
+    api_name = ot["api_name"]
+    display = ot.get("display_name") or api_name
+
+    n_targets = len(merged)
+    # ortho gives the cleanest right-angle routing for PlantUML ERDs
+    lines = [
+        "@startuml",
+        "hide circle",
+        "skinparam linetype ortho",
+        "skinparam defaultFontName Helvetica",
+        "skinparam defaultFontSize 11",
+    ]
+    lines.append(f'title {_puml_escape(display)} — relationships')
+    lines.append("")
+
+    # Focal entity (all properties)
+    lines.append(_puml_entity(api_name, ot, is_focal=True))
+    lines.append("")
+
+    # Neighbour entities
+    for info in merged.values():
+        tgt = info["target"]
+        if not tgt:
+            continue
+        tgt_ot = ot_by_name.get(tgt)
+        if tgt_ot:
+            lines.append(_puml_entity(tgt, tgt_ot, is_focal=False, link_labels=info["labels"]))
+        else:
+            lines.append(_puml_unknown_entity(tgt, info["labels"]))
+        lines.append("")
+
+    # Relationships
+    for info in merged.values():
+        tgt = info["target"]
+        if not tgt:
+            continue
+        lines.append(_puml_relation(api_name, tgt, info["cardinality"]))
+
+    lines.append("")
+    lines.append("@enduml")
+
+    puml_src = "\n".join(lines)
+
+    # Write .puml alongside the final SVG so plantuml -o writes into the same dir,
+    # then rename the output to the canonical api_name.svg path.
+    # Use resolved absolute paths — plantuml -o resolves relative to the .puml
+    # file's location, not the cwd, so relative paths silently produce no output.
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_dir_abs = out_path.parent.resolve()
+    tmp_puml = out_dir_abs / f"_{api_name}_tmp.puml"
+    tmp_puml.write_text(puml_src)
+    expected_svg = out_dir_abs / f"_{api_name}_tmp.svg"
+    # Remove any stale output from a previous run so plantuml always re-renders
+    expected_svg.unlink(missing_ok=True)
+
+    try:
+        result = subprocess.run(
+            ["plantuml", "-tsvg", str(tmp_puml), "-o", str(out_dir_abs)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if expected_svg.exists():
+            expected_svg.rename(out_path)
+            return out_path
+        raise RuntimeError(
+            f"plantuml did not produce SVG for {api_name}:\n"
+            f"  stderr: {result.stderr[:200]}\n"
+            f"  looked for: {expected_svg}"
+        )
+    finally:
+        tmp_puml.unlink(missing_ok=True)
+        expected_svg.unlink(missing_ok=True)
+
+
+# ── Graphviz overview (unchanged) ─────────────────────────────────────────────
+
+def _gv_node_attrs(ot: dict) -> dict[str, str]:
     s = (ot.get("status") or "").upper()
     return {
         "label":     f"{ot['display_name']}\n({ot['api_name']})",
@@ -50,90 +224,17 @@ def _node_attrs(ot: dict) -> dict[str, str]:
     }
 
 
-def _node_attrs_with_links(ot: dict, link_labels: list[str]) -> dict[str, str]:
-    """Target node that shows the link name(s) inside the box instead of on the edge.
-
-    This avoids hub-spoke label crowding: for high-degree source nodes, all
-    the relationship names sit inside their target boxes rather than jostling
-    around the centre of the diagram.
-    """
-    s = (ot.get("status") or "").upper()
-    via = "\n".join(f"← {l}" for l in link_labels)
-    return {
-        "label":     f"{ot['display_name']}\n({ot['api_name']})\n{via}",
-        "shape":     "box",
-        "style":     "filled,rounded",
-        "fillcolor": STATUS_FILL.get(s, DEFAULT_FILL),
-        "color":     STATUS_BORDER.get(s, DEFAULT_BORDER),
-        "fontname":  "Helvetica",
-        "fontsize":  "8",
-        "margin":    "0.15,0.08",
-    }
-
-
-def _unknown_node_attrs_with_links(name: str, link_labels: list[str]) -> dict[str, str]:
-    via = "\n".join(f"← {l}" for l in link_labels)
-    return {
-        "label":     f"{name}\n{via}",
-        "shape":     "box",
-        "style":     "dashed,rounded",
-        "fillcolor": "#eeeeee",
-        "color":     "#aaaaaa",
-        "fontsize":  "8",
-        "fontname":  "Helvetica",
-    }
-
-
-def _merge_links(links: list[dict]) -> dict[str, dict]:
-    """Merge parallel edges (same source→target pair) into one edge.
-
-    When multiple links go to the same target object, bundle them into a
-    single edge whose label lists all the link display names separated by
-    newlines.  Cardinality: MANY wins over ONE (crow arrow); color: purple
-    if any MANY, blue otherwise.
-    """
-    merged: dict[str, dict] = {}
-    for lk in links:
-        tgt = lk.get("target_object_type") or ""
-        src_api = lk.get("api_name") or ""  # not used for key — tgt is enough
-        card = (lk.get("cardinality") or "").upper()
-        key = tgt  # group by target
-        if key not in merged:
-            merged[key] = {
-                "target": tgt,
-                "labels": [],
-                "cardinality": card,
-            }
-        merged[key]["labels"].append(lk.get("link_display_name") or lk.get("api_name") or "")
-        # MANY beats ONE
-        if card == "MANY":
-            merged[key]["cardinality"] = "MANY"
-
-    return merged
-
-
-def _edge_attrs_merged(info: dict) -> dict[str, str]:
+def _gv_edge_attrs(info: dict) -> dict[str, str]:
     card = info["cardinality"]
-    arrow = "normal" if card == "ONE" else "crow"
-    color = CARDINALITY_COLOR.get(card, "#666666")
-    label = "\n".join(info["labels"])
-    return {
-        "label":     label,
-        "color":     color,
-        "fontcolor": "#333333",
-        "fontname":  "Helvetica",
-        "fontsize":  "7",
-        "arrowhead": arrow,
-        "penwidth":  "1.2",
-    }
+    color = "#6a5acd" if card == "MANY" else "#2b4a7a"
+    arrow = "crow" if card == "MANY" else "normal"
+    return {"color": color, "arrowhead": arrow, "penwidth": "1.0", "fontname": "Helvetica"}
 
-
-# ── overview graph ────────────────────────────────────────────────────────────
 
 def build_overview(object_types: list[dict], out_path: Path) -> Path:
-    """One graph of all objects that have ≥1 link (fdp force-directed layout)."""
+    """Graphviz sfdp overview of all connected objects."""
     linked = {ot["api_name"] for ot in object_types if ot["links"]}
-    targets = set()
+    targets: set[str] = set()
     for ot in object_types:
         for lk in ot["links"]:
             t = lk.get("target_object_type")
@@ -145,9 +246,9 @@ def build_overview(object_types: list[dict], out_path: Path) -> Path:
     g = graphviz.Digraph(
         name="ontology_overview",
         graph_attr={
-            "layout":        "sfdp",   # scalable fdp — handles 100+ nodes without hanging
+            "layout":        "sfdp",
             "splines":       "curved",
-            "overlap":       "prism",  # prism overlap removal is fast; "false" with fdp hangs
+            "overlap":       "prism",
             "fontname":      "Helvetica",
             "fontsize":      "10",
             "bgcolor":       "white",
@@ -163,118 +264,32 @@ def build_overview(object_types: list[dict], out_path: Path) -> Path:
     for name in sorted(nodes_needed):
         ot = ot_by_name.get(name)
         if ot:
-            g.node(name, **_node_attrs(ot))
+            g.node(name, **_gv_node_attrs(ot))
         else:
             g.node(name, label=name, shape="box", style="dashed,rounded",
                    fillcolor="#eeeeee", color="#aaaaaa", fontsize="9", fontname="Helvetica")
 
-    # Merge parallel edges per source→target pair for the overview too
     for ot in object_types:
         src = ot["api_name"]
-        merged = _merge_links(ot["links"])
-        for info in merged.values():
+        for info in _merge_links(ot["links"]).values():
             tgt = info["target"]
-            if not tgt:
-                continue
-            g.edge(src, tgt, **_edge_attrs_merged(info))
+            if tgt:
+                g.edge(src, tgt, **_gv_edge_attrs(info))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     svg_path = Path(g.render(filename=str(out_path.with_suffix("")), format="svg", cleanup=True))
     total_edges = sum(len(_merge_links(ot["links"])) for ot in object_types)
-    print(f"  overview: {svg_path} ({svg_path.stat().st_size:,} bytes, {len(nodes_needed)} nodes, {total_edges} merged edges)")
-    return svg_path
-
-
-# ── per-object neighbourhood ──────────────────────────────────────────────────
-
-def build_neighbourhood(ot: dict, ot_by_name: dict[str, dict], out_path: Path) -> Path | None:
-    """1-hop neighbourhood: the object itself + all objects it links to.
-
-    Parallel edges (multiple links to same target) are merged into one edge
-    with a multi-line label.  Layout uses 'dot' TB for small graphs, 'neato'
-    for large ones (>8 targets) which handles sprawling spoke-graphs better.
-    """
-    if not ot["links"]:
-        return None
-
-    merged = _merge_links(ot["links"])
-    n_targets = len(merged)
-
-    # dot LR: clean for small/medium graphs (≤12 targets)
-    # twopi: radial layout spreads targets evenly around the hub — prevents
-    #         arrow bundling at the centre for large spoke graphs (>12 targets)
-    if n_targets <= 12:
-        layout   = "dot"
-        rankdir  = "LR"
-        splines  = "spline"
-        nodesep  = "0.5"
-        ranksep  = "1.4"
-        overlap  = "false"
-    else:
-        layout   = "twopi"
-        rankdir  = ""
-        splines  = "spline"
-        nodesep  = "0.8"
-        ranksep  = "2.5"
-        overlap  = "false"
-
-    graph_attr: dict[str, str] = {
-        "layout":   layout,
-        "splines":  splines,
-        "overlap":  overlap,
-        "sep":      "+6",
-        "fontname": "Helvetica",
-        "fontsize": "9",
-        "bgcolor":  "white",
-        "pad":      "0.3",
-        "label":    f"{ot['display_name']} — relationships",
-        "labelloc": "t",
-        "nodesep":  nodesep,
-    }
-    if rankdir:
-        graph_attr["rankdir"] = rankdir
-    if layout == "dot":
-        graph_attr["ranksep"] = ranksep
-
-    g = graphviz.Digraph(
-        name=f"obj_{ot['api_name']}",
-        graph_attr=graph_attr,
-        node_attr={"fontname": "Helvetica"},
-        edge_attr={"fontname": "Helvetica"},
-    )
-
-    # focal node — bolder border
-    focal_attrs = _node_attrs(ot)
-    focal_attrs["penwidth"] = "2.5"
-    focal_attrs["fontsize"] = "10"
-    g.node(ot["api_name"], **focal_attrs)
-
-    # add target nodes + one unlabelled edge per target
-    # Link names go INSIDE the target node box to avoid hub-spoke label crowding
-    for info in merged.values():
-        tgt = info["target"]
-        if not tgt:
-            continue
-        tgt_ot = ot_by_name.get(tgt)
-        if tgt_ot:
-            g.node(tgt, **_node_attrs_with_links(tgt_ot, info["labels"]))
-        else:
-            g.node(tgt, **_unknown_node_attrs_with_links(tgt, info["labels"]))
-        # Edge carries only cardinality arrow — no text label
-        card = info["cardinality"]
-        arrow = "normal" if card == "ONE" else "crow"
-        color = CARDINALITY_COLOR.get(card, "#666666")
-        g.edge(ot["api_name"], tgt,
-               color=color, arrowhead=arrow, penwidth="1.5")
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    svg_path = Path(g.render(filename=str(out_path.with_suffix("")), format="svg", cleanup=True))
+    print(f"  overview: {svg_path} ({svg_path.stat().st_size:,} bytes, "
+          f"{len(nodes_needed)} nodes, {total_edges} edges)")
     return svg_path
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def generate_graphs(export_path: Path, out_dir: Path) -> None:
+    if not shutil.which("plantuml"):
+        raise SystemExit("plantuml not found on PATH. Install with: brew install plantuml")
+
     from foundry_ontology_docs.docgen import build_object_type_rows
 
     data = json.loads(export_path.read_text())
@@ -283,18 +298,24 @@ def generate_graphs(export_path: Path, out_dir: Path) -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Building overview graph...")
+    print("Building overview graph (Graphviz sfdp)...")
     build_overview(object_types, out_dir / "overview.svg")
 
-    print("Building per-object neighbourhood diagrams...")
+    print("Building per-object neighbourhood diagrams (PlantUML ERD)...")
     n = 0
+    errors = 0
     for ot in object_types:
         if not ot["links"]:
             continue
         path = out_dir / f"{ot['api_name']}.svg"
-        build_neighbourhood(ot, ot_by_name, path)
-        n += 1
-    print(f"  {n} neighbourhood diagrams written to {out_dir}/")
+        try:
+            build_neighbourhood_puml(ot, ot_by_name, path)
+            n += 1
+        except Exception as e:
+            print(f"  WARNING: {ot['api_name']}: {e}")
+            errors += 1
+    print(f"  {n} diagrams written to {out_dir}/"
+          + (f" ({errors} errors)" if errors else ""))
 
 
 def main() -> None:

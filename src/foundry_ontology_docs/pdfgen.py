@@ -162,7 +162,88 @@ tr:nth-child(even) td { background: #f7f8fb; }
 .tag-DEPRECATED  { background: #f8d7da; color: #721c24; }
 .tag-EXPERIMENTAL{ background: #fff3cd; color: #856404; }
 
-/* cover meta block */
+/* ── cover page ── */
+.cover-banner {
+    background: #0f2044;
+    color: white;
+    padding: 36pt 32pt 28pt 32pt;
+    margin: -1.6cm -1.4cm 0 -1.4cm;
+    border-bottom: 4pt solid #2b6cb0;
+}
+.cover-banner h1 {
+    font-size: 28pt;
+    color: white;
+    border: none;
+    margin: 0 0 4pt 0;
+    padding: 0;
+    break-before: avoid;
+    letter-spacing: 0.5pt;
+}
+.cover-subtitle {
+    font-size: 11pt;
+    color: #a0bce0;
+    margin: 0 0 20pt 0;
+    font-style: italic;
+}
+.cover-stats-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 6pt;
+    margin: 0;
+    table-layout: fixed;
+}
+.cover-stats-table td {
+    background: rgba(255,255,255,0.08);
+    border: 0.5pt solid rgba(255,255,255,0.2);
+    border-radius: 3pt;
+    padding: 8pt 10pt;
+    vertical-align: top;
+    text-align: center;
+}
+.cover-stat-value {
+    font-size: 20pt;
+    font-weight: bold;
+    color: #63b3ed;
+    line-height: 1.1;
+    display: block;
+}
+.cover-stat-label {
+    font-size: 7pt;
+    color: #90a8c8;
+    text-transform: uppercase;
+    letter-spacing: 0.4pt;
+    display: block;
+    margin-top: 2pt;
+}
+.cover-meta {
+    background: #f4f6fb;
+    border: 0.5pt solid #c5d3e8;
+    border-radius: 3pt;
+    padding: 7pt 12pt;
+    margin: 14pt 0 10pt 0;
+    font-size: 8pt;
+}
+.cover-meta table { font-size: 8pt; margin: 0; }
+.cover-meta td { border: none; padding: 2pt 10pt 2pt 0; background: transparent; }
+.cover-meta td:first-child { font-weight: bold; color: #555; width: 110pt; }
+.cover-groups-title {
+    font-size: 9pt;
+    font-weight: bold;
+    color: #0f2044;
+    margin: 12pt 0 5pt 0;
+}
+.cover-group-pill {
+    display: inline-block;
+    background: #e4eaf4;
+    border: 0.5pt solid #c5d3e8;
+    border-radius: 2pt;
+    padding: 2pt 6pt;
+    margin: 1.5pt 2pt;
+    font-size: 7.5pt;
+    color: #2b4a7a;
+}
+
+/* cover meta block (legacy) */
 .meta-block {
     background: #f4f6fb;
     border: 0.5pt solid #c5d3e8;
@@ -174,6 +255,19 @@ tr:nth-child(even) td { background: #f7f8fb; }
 .meta-block table { font-size: 8.5pt; margin: 0; }
 .meta-block td { border: none; padding: 2pt 10pt 2pt 0; background: transparent; }
 .meta-block td:first-child { font-weight: bold; color: #555; width: 130pt; }
+
+/* group divider in object-type sections */
+.group-heading {
+    font-size: 15pt;
+    color: #0f2044;
+    background: #e4eaf4;
+    border-left: 4pt solid #2b4a7a;
+    padding: 6pt 10pt;
+    margin: 24pt 0 10pt 0;
+    break-before: page;
+    break-after: avoid;
+}
+.group-heading.first { break-before: avoid; }
 
 /* TOC */
 .toc-section { margin-bottom: 14pt; }
@@ -337,22 +431,42 @@ def _param_table(params: list[dict]) -> str:
 # ── section builders ──────────────────────────────────────────────────────────
 
 def _build_cover(data: dict, object_types: list[dict], action_types: list[dict]) -> str:
-    hostname = _h(data.get("hostname") or "")
-    ontology = _h(data.get("ontology") or "")
-    exported = _h(data.get("exported_at") or "")
-    n_links = sum(len(ot["links"]) for ot in object_types)
-    return f"""
-<h1 class="first">Ontology Documentation</h1>
-<div class="meta-block">
-  <table>
-    <tr><td>Ontology</td><td><code>{ontology}</code></td></tr>
-    <tr><td>Host</td><td><code>{hostname}</code></td></tr>
-    <tr><td>Exported</td><td>{exported}</td></tr>
-    <tr><td>Object types</td><td>{len(object_types)}</td></tr>
-    <tr><td>Action types</td><td>{len(action_types)}</td></tr>
-    <tr><td>Link types</td><td>{n_links}</td></tr>
+    from collections import Counter
+    hostname  = _h(data.get("hostname") or "")
+    ontology  = _h(data.get("ontology") or "Foundry Ontology")
+    exported  = _h(data.get("exported_at") or "")
+    n_links   = sum(len(ot["links"]) for ot in object_types)
+    n_props   = sum(len(ot["properties"]) for ot in object_types)
+
+    # Group counts for the cover pill list
+    group_counts = Counter(ot["group"] for ot in object_types)
+    pills = "".join(
+        f'<span class="cover-group-pill"><strong>{count}</strong> {_h(grp)}</span>'
+        for grp, count in sorted(group_counts.items(), key=lambda x: -x[1])
+    )
+
+    return f"""\
+<div class="cover-banner">
+  <h1>Ontology Documentation</h1>
+  <p class="cover-subtitle">{ontology}</p>
+  <table class="cover-stats-table">
+    <tr>
+      <td><span class="cover-stat-value">{len(object_types)}</span><span class="cover-stat-label">Object Types</span></td>
+      <td><span class="cover-stat-value">{len(action_types)}</span><span class="cover-stat-label">Action Types</span></td>
+      <td><span class="cover-stat-value">{n_links}</span><span class="cover-stat-label">Link Types</span></td>
+      <td><span class="cover-stat-value">{n_props}</span><span class="cover-stat-label">Properties</span></td>
+    </tr>
   </table>
 </div>
+<div class="cover-meta">
+  <table>
+    <tr><td>Host</td><td><code>{hostname}</code></td></tr>
+    <tr><td>Exported</td><td>{exported}</td></tr>
+    <tr><td>Domains</td><td>{len(group_counts)} inferred groups</td></tr>
+  </table>
+</div>
+<p class="cover-groups-title">Object Types by Domain</p>
+<div>{pills}</div>
 """
 
 
@@ -374,20 +488,36 @@ def _toc_table(items: list[tuple[str, str]], cols: int = 3) -> str:
 
 
 def _build_toc(object_types: list[dict], action_types: list[dict]) -> str:
-    obj_items = [
-        (f"#{_slug(ot['api_name'])}", ot["display_name"])
-        for ot in object_types
-    ]
+    from collections import defaultdict
+    # Group object types by domain, preserving group order from the list
+    seen_groups: list[str] = []
+    by_group: dict[str, list[dict]] = defaultdict(list)
+    for ot in object_types:
+        g = ot["group"]
+        if g not in seen_groups:
+            seen_groups.append(g)
+        by_group[g].append(ot)
+
+    obj_sections = ""
+    for grp in seen_groups:
+        items = [
+            (f"#{_slug(ot['api_name'])}", ot["display_name"])
+            for ot in by_group[grp]
+        ]
+        obj_sections += f"""
+  <div class="toc-section">
+    <div class="toc-section-title">{_h(grp)} ({len(items)})</div>
+    {_toc_table(items)}
+  </div>"""
+
     act_items = [
         (f"#{_action_slug(at['api_name'])}", at["display_name"])
         for at in action_types
     ]
     return f"""
 <h1>Table of Contents</h1>
-<div class="toc-section">
-  <div class="toc-section-title">Object Types ({len(object_types)})</div>
-  {_toc_table(obj_items)}
-</div>
+<h2 style="margin-top:10pt">Object Types ({len(object_types)})</h2>
+{obj_sections}
 <div class="toc-section">
   <div class="toc-section-title">Action Types ({len(action_types)})</div>
   {_toc_table(act_items)}
@@ -404,26 +534,46 @@ def _embed_svg(svg_path: Path) -> str:
 
 
 def _build_object_sections(object_types: list[dict], graph_dir: Path | None = None) -> str:
-    parts = ["<h1>Object Types</h1>"]
+    from collections import defaultdict
+    # Preserve group ordering from the sorted object list
+    seen_groups: list[str] = []
+    by_group: dict[str, list[dict]] = defaultdict(list)
     for ot in object_types:
-        slug = _slug(ot["api_name"])
-        status_tag = _tag_html(ot["status"])
-        ifaces = (
-            ", ".join(_code(i) for i in ot["implements_interfaces"])
-            if ot["implements_interfaces"] else "—"
-        )
-        desc_row = (
-            f"<tr><td>Description</td><td>{_h(ot['description'])}</td></tr>"
-            if ot["description"] else ""
-        )
-        # Embed neighbourhood SVG if it exists
-        graph_html = ""
-        if graph_dir and ot["links"]:
-            svg_path = graph_dir / f"{ot['api_name']}.svg"
-            if svg_path.exists():
-                graph_html = f"<h3>Relationship Diagram</h3>{_embed_svg(svg_path)}"
+        g = ot["group"]
+        if g not in seen_groups:
+            seen_groups.append(g)
+        by_group[g].append(ot)
 
-        parts.append(f"""
+    parts = ["<h1>Object Types</h1>"]
+    first_group = True
+    for grp in seen_groups:
+        cls = "group-heading first" if first_group else "group-heading"
+        parts.append(f'<div class="{cls}">{_h(grp)}</div>')
+        first_group = False
+        for ot in by_group[grp]:
+            slug = _slug(ot["api_name"])
+            status_tag = _tag_html(ot["status"])
+            ifaces = (
+                ", ".join(_code(i) for i in ot["implements_interfaces"])
+                if ot["implements_interfaces"] else "—"
+            )
+            desc_row = (
+                f"<tr><td>Description</td><td>{_h(ot['description'])}</td></tr>"
+                if ot["description"] else ""
+            )
+            # Embed neighbourhood SVG if it exists and the object has ≤15 distinct
+            # link targets — larger spoke graphs are unreadable when embedded at
+            # page width, but are still available as standalone SVGs in docs/graph/
+            graph_html = ""
+            if graph_dir and ot["links"]:
+                from foundry_ontology_docs.graphgen import _merge_links
+                n_targets = len(_merge_links(ot["links"]))
+                if n_targets <= 15:
+                    svg_path = graph_dir / f"{ot['api_name']}.svg"
+                    if svg_path.exists():
+                        graph_html = f"<h3>Relationship Diagram</h3>{_embed_svg(svg_path)}"
+
+            parts.append(f"""
 <div id="{slug}">
   <h2>{_h(ot['display_name'])}{status_tag}
     <small style="font-size:8pt;font-weight:normal;color:#666;margin-left:6pt">{_h(ot['api_name'])}</small>

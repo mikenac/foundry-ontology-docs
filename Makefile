@@ -19,9 +19,12 @@ GRAPH_DIR     ?= docs/graph
 PDF_OUT       ?= docs/ontology-documentation.pdf
 GROUPS_CONFIG ?= groups.json
 
-# Load .env if present (so make targets work without pre-exporting env vars)
--include .env
-export FOUNDRY_HOSTNAME FOUNDRY_TOKEN FOUNDRY_ONTOLOGY_RID FOUNDRY_GROUPS_CONFIG
+# Do NOT -include .env here — the .env parser in export.py handles command
+# substitutions like $(security ...) which make would misinterpret.
+# Set FOUNDRY_HOSTNAME / FOUNDRY_ONTOLOGY_RID on the command line to override,
+# or just let the Python tools read .env themselves.
+FOUNDRY_HOSTNAME    ?=
+FOUNDRY_ONTOLOGY_RID ?=
 
 # ── targets ───────────────────────────────────────────────────────────────────
 
@@ -45,21 +48,7 @@ setup:
 
 ## Pull latest ontology metadata from Foundry into $(EXPORT_PATH)
 export:
-	@if [ -z "$(FOUNDRY_HOSTNAME)" ]; then \
-		echo "❌  FOUNDRY_HOSTNAME is not set. Copy .env.example to .env and fill in your values."; \
-		exit 1; \
-	fi
-	@if [ -z "$(FOUNDRY_TOKEN)" ]; then \
-		echo "❌  FOUNDRY_TOKEN is not set. Copy .env.example to .env and fill in your values."; \
-		exit 1; \
-	fi
-	@if [ -z "$(FOUNDRY_ONTOLOGY_RID)" ]; then \
-		echo "❌  FOUNDRY_ONTOLOGY_RID is not set. Copy .env.example to .env and fill in your values."; \
-		exit 1; \
-	fi
-	uv run foundry-ontology-export \
-		--ontology "$(FOUNDRY_ONTOLOGY_RID)" \
-		--out "$(EXPORT_PATH)"
+	uv run foundry-ontology-export --out "$(EXPORT_PATH)"
 
 ## Generate SVG relationship diagrams (overview + per-object ERDs)
 graphs: $(EXPORT_PATH)

@@ -33,9 +33,11 @@ git clone <repo-url>
 cd foundry-ontology-docs
 uv sync
 
-# 2. Configure credentials
+# 2. Configure credentials and groups
 cp .env.example .env
+cp groups.example.json groups.json
 $EDITOR .env          # fill in FOUNDRY_HOSTNAME, FOUNDRY_TOKEN, FOUNDRY_ONTOLOGY_RID
+$EDITOR groups.json   # edit prefix → group mappings to match your ontology
 
 # 3. Run the full pipeline
 make
@@ -96,7 +98,7 @@ make pdf EXPORT_PATH=out/my_export.json PDF_OUT=docs/my-ontology.pdf
 
 ## Domain grouping
 
-Object types are grouped into domains for the table of contents and PDF sections. Groups are defined in **`groups.json`** at the repo root — edit it freely without touching any Python code:
+Object types are grouped into domains for the table of contents and PDF sections. Groups are defined in **`groups.json`** (gitignored — copy from `groups.example.json`):
 
 ```json
 [

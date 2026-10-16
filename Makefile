@@ -38,6 +38,10 @@ all: export docs graphs pdf
 ## Install / sync Python dependencies
 setup:
 	uv sync
+	@if [ ! -f groups.json ]; then \
+		cp groups.example.json groups.json; \
+		echo "✅  Created groups.json from groups.example.json — edit it to match your ontology."; \
+	fi
 
 ## Pull latest ontology metadata from Foundry into $(EXPORT_PATH)
 export:

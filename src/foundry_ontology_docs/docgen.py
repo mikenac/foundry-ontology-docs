@@ -50,6 +50,7 @@ def load_export(path: Path) -> dict[str, Any]:
 # Order matters — first matching prefix wins. Unmatched objects → "Other".
 
 _DEFAULT_GROUPS_PATH = Path(__file__).parent.parent.parent / "groups.json"
+_DEFAULT_GROUPS_EXAMPLE = Path(__file__).parent.parent.parent / "groups.example.json"
 _loaded_rules: list[tuple[tuple[str, ...], str]] | None = None
 
 
@@ -65,7 +66,11 @@ def load_groups(path: Path | None = None) -> list[tuple[tuple[str, ...], str]]:
         path = Path(env_path) if env_path else _DEFAULT_GROUPS_PATH
 
     if not path.exists():
-        return []
+        # Fall back to the example file so the pipeline works out of the box
+        if path == _DEFAULT_GROUPS_PATH and _DEFAULT_GROUPS_EXAMPLE.exists():
+            path = _DEFAULT_GROUPS_EXAMPLE
+        else:
+            return []
 
     raw = json.loads(path.read_text())
     rules = [

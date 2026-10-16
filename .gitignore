@@ -14,6 +14,9 @@ wheels/
 out/
 docs/
 
+# Local group config (copy groups.example.json → groups.json and customise)
+groups.json
+
 # OS / editor
 .DS_Store
 .vscode/

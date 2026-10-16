@@ -22,6 +22,24 @@ from typing import Any
 from foundry_sdk import FoundryClient, UserTokenAuth
 
 
+def _load_dotenv() -> None:
+    """Load .env from the repo root into os.environ (if present).
+    Pure-stdlib implementation — no python-dotenv dependency required.
+    Variables already set in the environment take precedence."""
+    env_path = Path(__file__).parent.parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def _env_or_die(name: str) -> str:
     val = os.environ.get(name)
     if not val:
@@ -76,6 +94,7 @@ def export_ontology(ontology: str, out_path: Path) -> Path:
 
 
 def main() -> None:
+    _load_dotenv()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--ontology",

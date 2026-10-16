@@ -43,78 +43,44 @@ def load_export(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
-# Domain groups inferred from api_name prefixes.
-# Order matters — first match wins.
-_GROUP_RULES: list[tuple[str | tuple[str, ...], str]] = [
-    ("Dictionary",                          "Dictionaries & Reference Data"),
-    ("Evolution",                           "Evolution (AI/ML)"),
-    (("Hl7", "HL7"),                        "HL7 Integration"),
-    (("TransferCase", "TransferCenter",
-      "TransferCall", "TransferApp",
-      "TransferIq"),                        "Transfer IQ"),
-    (("BedRequest", "BedSpot"),             "Bed Management"),
-    (("Facility", "FacilityType",
-      "FacilityDistance",
-      "FacilityMaster", "FacilityClaim",
-      "FacilityProduct"),                   "Facilities"),
-    (("Location", "Room", "Building",
-      "Floor", "Unit"),                     "Locations & Facilities"),
-    (("Patient", "Visit", "VitalSign",
-      "Appointment", "Assessment",
-      "Provider", "Staff", "Person",
-      "Clinic", "BodyTemp", "Financial",
-      "Note", "Document",
-      "DispositionReason",
-      "LevelOfCareFlow",
-      "SpecialtyHospital"),              "Clinical / Patient"),
-    (("Referral", "CaseCall",
-      "CaseCommunication", "CasePrint",
-      "CasePool", "CaseView",
-      "CaseInter"),                       "Referral & Case Management"),
-    (("Log", "AuditLog",
-      "Conversational"),                  "Audit & Logging"),
-    (("Notification", "Email",
-      "Sms", "Phone",
-      "Foundry"),                         "Notifications"),
-    (("User", "Team", "Staff",
-      "InternalGroup", "SAML",
-      "Session", "Organization"),         "Users & Access"),
-    (("Client", "Contract",
-      "License", "Product",
-      "Capability", "Marketplace",
-      "Onboarding"),                       "Platform / Licensing"),
-    (("CallRecording",),                   "Call Recording"),
-    (("DataConnection", "DataSource",
-      "FluxTransform", "EventTopic",
-      "SystemOfRecord", "NamespaceConfig",
-      "OverwritePolicy", "UrlMapping",
-      "Urlmapping", "Dlq",
-      "CrossOntology"),                    "Data & Integration"),
-    (("Intercom",),                        "Intercom"),
-    (("Interface",),                       "Interface Actions"),
-    (("DelayThreshold", "MenuNavigation",
-      "TabConfig", "Settings",
-      "SettingAgreement", "ObjectView",
-      "UserAgreement", "UserCms",
-      "UserNotification", "UserNpi",
-      "TenantCreation",
-      "EnterpriseStructure",
-      "ContactInvite", "ContactTypes",
-      "CmsPage", "Issue",
-      "CodeRepository"),                   "Config & Admin"),
-    (("osdk", "Advance", "Agent",
-      "Example", "Experiment",
-      "SysTest", "Bereket",
-      "Mock", "template", "DateTest",
-      "ColorConfig", "Ao8"),              "Dev / Test / OSDK"),
-]
+# ── domain group mapping ───────────────────────────────────────────────────────
+# Loaded from groups.json (repo root) by default; override via
+# FOUNDRY_GROUPS_CONFIG env var or by passing a path to load_groups().
+# Format: [{"group": "Label", "prefixes": ["Prefix1", "Prefix2"]}, ...]
+# Order matters — first matching prefix wins. Unmatched objects → "Other".
+
+_DEFAULT_GROUPS_PATH = Path(__file__).parent.parent.parent / "groups.json"
+_loaded_rules: list[tuple[tuple[str, ...], str]] | None = None
+
+
+def load_groups(path: Path | None = None) -> list[tuple[tuple[str, ...], str]]:
+    """Load group rules from a JSON file. Cached after first load."""
+    global _loaded_rules
+    if _loaded_rules is not None and path is None:
+        return _loaded_rules
+
+    import os
+    if path is None:
+        env_path = os.environ.get("FOUNDRY_GROUPS_CONFIG")
+        path = Path(env_path) if env_path else _DEFAULT_GROUPS_PATH
+
+    if not path.exists():
+        return []
+
+    raw = json.loads(path.read_text())
+    rules = [
+        (tuple(entry["prefixes"]), entry["group"])
+        for entry in raw
+        if entry.get("prefixes") and entry.get("group")
+    ]
+    if path == _DEFAULT_GROUPS_PATH or os.environ.get("FOUNDRY_GROUPS_CONFIG"):
+        _loaded_rules = rules
+    return rules
 
 
 def infer_group(api_name: str) -> str:
     """Return a domain group label for an object type based on its api_name prefix."""
-    for prefixes, label in _GROUP_RULES:
-        if isinstance(prefixes, str):
-            prefixes = (prefixes,)
+    for prefixes, label in load_groups():
         if any(api_name.startswith(p) or api_name.lower().startswith(p.lower())
                for p in prefixes):
             return label

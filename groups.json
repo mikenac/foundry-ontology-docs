@@ -1,0 +1,96 @@
+[
+  {
+    "group": "Dictionaries & Reference Data",
+    "prefixes": ["Dictionary"]
+  },
+  {
+    "group": "Evolution (AI/ML)",
+    "prefixes": ["Evolution"]
+  },
+  {
+    "group": "HL7 Integration",
+    "prefixes": ["Hl7", "HL7"]
+  },
+  {
+    "group": "Transfer IQ",
+    "prefixes": ["TransferCase", "TransferCenter", "TransferCall", "TransferApp", "TransferIq"]
+  },
+  {
+    "group": "Bed Management",
+    "prefixes": ["BedRequest", "BedSpot"]
+  },
+  {
+    "group": "Facilities",
+    "prefixes": ["Facility", "FacilityType", "FacilityDistance", "FacilityMaster", "FacilityClaim", "FacilityProduct"]
+  },
+  {
+    "group": "Locations & Facilities",
+    "prefixes": ["Location", "Room", "Building", "Floor", "Unit"]
+  },
+  {
+    "group": "Clinical / Patient",
+    "prefixes": [
+      "Patient", "Visit", "VitalSign", "Appointment", "Assessment",
+      "Provider", "Staff", "Person", "Clinic", "BodyTemp", "Financial",
+      "Note", "Document", "DispositionReason", "LevelOfCareFlow", "SpecialtyHospital"
+    ]
+  },
+  {
+    "group": "Referral & Case Management",
+    "prefixes": ["Referral", "CaseCall", "CaseCommunication", "CasePrint", "CasePool", "CaseView", "CaseInter"]
+  },
+  {
+    "group": "Audit & Logging",
+    "prefixes": ["Log", "AuditLog", "Conversational"]
+  },
+  {
+    "group": "Notifications",
+    "prefixes": ["Notification", "Email", "Sms", "Phone", "Foundry"]
+  },
+  {
+    "group": "Users & Access",
+    "prefixes": ["User", "Team", "Staff", "InternalGroup", "SAML", "Session", "Organization"]
+  },
+  {
+    "group": "Platform / Licensing",
+    "prefixes": ["Client", "Contract", "License", "Product", "Capability", "Marketplace", "Onboarding"]
+  },
+  {
+    "group": "Call Recording",
+    "prefixes": ["CallRecording"]
+  },
+  {
+    "group": "Data & Integration",
+    "prefixes": [
+      "DataConnection", "DataSource", "FluxTransform", "EventTopic",
+      "SystemOfRecord", "NamespaceConfig", "OverwritePolicy",
+      "UrlMapping", "Urlmapping", "Dlq", "CrossOntology"
+    ]
+  },
+  {
+    "group": "Intercom",
+    "prefixes": ["Intercom"]
+  },
+  {
+    "group": "Interface Actions",
+    "prefixes": ["Interface"]
+  },
+  {
+    "group": "Config & Admin",
+    "prefixes": [
+      "DelayThreshold", "MenuNavigation", "TabConfig", "Settings",
+      "SettingAgreement", "ObjectView", "UserAgreement", "UserCms",
+      "UserNotification", "UserNpi", "TenantCreation",
+      "EnterpriseStructure", "ContactInvite", "ContactTypes",
+      "CmsPage", "Issue", "CodeRepository"
+    ]
+  },
+  {
+    "group": "Dev / Test / OSDK",
+    "prefixes": [
+      "osdk", "Advance", "Agent", "Example", "Experiment",
+      "SysTest", "Bereket", "Mock", "template", "DateTest",
+      "ColorConfig", "Ao8"
+    ]
+  }
+]
